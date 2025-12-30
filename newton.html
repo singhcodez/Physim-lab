@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newton's Lab: Force & Work</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono&display=swap');
+
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --accent: #10b981;
+            --bg: #0f172a;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        .formula-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary);
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        #physics-canvas {
+            background: linear-gradient(to bottom, #1e293b 0%, #0f172a 100%);
+            border-radius: 1rem;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .vector-label {
+            position: absolute;
+            pointer-events: none;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        @keyframes pulse-success {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+            100% { transform: scale(1); }
+        }
+
+        .success-node {
+            animation: pulse-success 1s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="p-4 glass sticky top-0 z-50 flex justify-between items-center px-6 lg:px-12">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2 rounded-lg">
+                <i class="fas fa-atom text-white text-xl"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">Newton's <span class="text-indigo-400">Lab</span></h1>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="hidden md:block">
+                <span class="text-slate-400 text-sm">Level:</span>
+                <span id="level-indicator" class="font-bold text-indigo-400">1 / 4</span>
+            </div>
+            <button onclick="resetSim()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm transition">
+                <i class="fas fa-undo mr-2"></i> Reset
+            </button>
+        </div>
+    </nav>
+
+    <main class="flex-1 container mx-auto p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Column: Controls & Lessons -->
+        <div class="lg:col-span-4 space-y-6">
+            <!-- Mission Brief -->
+            <div class="glass rounded-2xl p-6 shadow-xl">
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+                    <i class="fas fa-rocket text-indigo-500"></i> Mission Briefing
+                </h2>
+                <p id="mission-text" class="text-slate-300 text-sm leading-relaxed mb-4">
+                    Newton's First Law: Inertia. The block is at rest. Apply exactly 10N of force to move it into the target zone.
+                </p>
+                
+                <div class="formula-font bg-slate-900/50 p-3 rounded-lg border border-slate-700 space-y-1">
+                    <div class="text-xs text-slate-500">Formulas in Action:</div>
+                    <div class="text-sm text-indigo-300">F = m × a</div>
+                    <div class="text-sm text-emerald-300">W = F × d</div>
+                </div>
+            </div>
+
+            <!-- Interaction Controls -->
+            <div class="glass rounded-2xl p-6 shadow-xl space-y-6">
+                <h2 class="text-lg font-bold mb-2">Lab Controls</h2>
+                
+                <!-- Mass Slider -->
+                <div class="space-y-3">
+                    <div class="flex justify-between text-sm">
+                        <label class="text-slate-400">Mass (m)</label>
+                        <span class="font-bold text-white"><span id="val-mass">5</span> kg</span>
+                    </div>
+                    <input type="range" id="input-mass" min="1" max="20" step="0.5" value="5" class="slider" oninput="updateControls()">
+                </div>
+
+                <!-- Force Slider -->
+                <div class="space-y-3">
+                    <div class="flex justify-between text-sm">
+                        <label class="text-slate-400">Applied Force (F)</label>
+                        <span class="font-bold text-white"><span id="val-force">0</span> N</span>
+                    </div>
+                    <input type="range" id="input-force" min="0" max="50" step="1" value="0" class="slider" oninput="updateControls()">
+                </div>
+
+                <!-- Simulation Trigger -->
+                <button id="action-btn" onclick="toggleSim()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95">
+                    Start Simulation
+                </button>
+            </div>
+
+            <!-- Stats Real-time -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass rounded-xl p-4 text-center">
+                    <div class="text-[10px] uppercase tracking-widest text-slate-500">Acceleration</div>
+                    <div id="stat-accel" class="text-xl font-bold formula-font">0.00 m/s²</div>
+                </div>
+                <div class="glass rounded-xl p-4 text-center">
+                    <div class="text-[10px] uppercase tracking-widest text-slate-500">Work Done</div>
+                    <div id="stat-work" class="text-xl font-bold formula-font text-emerald-400">0.00 J</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Canvas Viewport -->
+        <div class="lg:col-span-8 flex flex-col gap-4">
+            <div class="relative flex-1 min-h-[400px]">
+                <canvas id="physics-canvas" class="w-full h-full shadow-2xl"></canvas>
+                
+                <!-- HUD Overlays -->
+                <div class="absolute top-4 left-4 flex gap-2">
+                    <span class="px-3 py-1 bg-slate-900/80 rounded-full text-xs font-mono border border-slate-700">
+                        x: <span id="hud-x">0.0m</span>
+                    </span>
+                    <span class="px-3 py-1 bg-slate-900/80 rounded-full text-xs font-mono border border-slate-700">
+                        v: <span id="hud-v">0.0m/s</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Feedback Log -->
+            <div class="glass rounded-xl p-4 border-l-4 border-indigo-500">
+                <div class="text-xs font-bold text-slate-500 uppercase mb-1">Observation Log</div>
+                <div id="physics-log" class="text-sm text-slate-300">Adjust the sliders to begin the experiment.</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Level Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-slate-950/90 hidden z-[100] flex items-center justify-center p-4">
+        <div class="glass max-w-md w-full rounded-3xl p-8 text-center border-2 border-emerald-500/30">
+            <div class="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/40">
+                <i class="fas fa-check text-4xl text-white"></i>
+            </div>
+            <h3 class="text-3xl font-bold mb-2">Challenge Complete!</h3>
+            <p id="success-desc" class="text-slate-400 mb-8">You successfully demonstrated how Force creates Acceleration.</p>
+            <button onclick="nextLevel()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-bold transition">
+                Proceed to Next Experiment
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('physics-canvas');
+        const ctx = canvas.getContext('2d');
+        const log = document.getElementById('physics-log');
+        
+        let animationId;
+        let isRunning = false;
+        let currentLevel = 0;
+
+        // Physics State (Standard Units: m, kg, N, s)
+        const state = {
+            m: 5,       // mass
+            F: 0,       // applied force
+            x: 50,      // position (px)
+            v: 0,       // velocity
+            a: 0,       // accel
+            friction: 0.1,
+            dt: 0.016,  // ~60fps step
+            startTime: 0,
+            distanceMoved: 0,
+            workDone: 0
+        };
+
+        const levels = [
+            {
+                title: "Law of Inertia",
+                mission: "Newton's 1st Law: Apply exactly 20N of force to move the 10kg block into the target zone (400m+).",
+                target: { x: 400, condition: (s) => s.x > 400 && s.v > 0 },
+                setup: () => { 
+                    state.m = 10; 
+                    state.F = 0; 
+                    state.x = 50; 
+                    state.v = 0;
+                    document.getElementById('input-mass').value = 10;
+                    document.getElementById('input-force').value = 0;
+                }
+            },
+            {
+                title: "Accelerated Motion",
+                mission: "Newton's 2nd Law (F=ma): Reach a velocity of exactly 15 m/s using a 5kg mass. Balance Force carefully!",
+                target: { x: 0, condition: (s) => s.v >= 15 },
+                setup: () => { 
+                    state.m = 5; 
+                    state.x = 50; 
+                    state.v = 0;
+                }
+            },
+            {
+                title: "Energy & Work",
+                mission: "Perform exactly 500 Joules of Work Done. Hint: Work = Force x Distance. Adjust Force and Distance accordingly.",
+                target: { x: 0, condition: (s) => s.workDone >= 500 },
+                setup: () => { 
+                    state.m = 2; 
+                    state.x = 50; 
+                    state.v = 0;
+                }
+            }
+        ];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+
+        function updateControls() {
+            state.m = parseFloat(document.getElementById('input-mass').value);
+            state.F = parseFloat(document.getElementById('input-force').value);
+            
+            document.getElementById('val-mass').innerText = state.m.toFixed(1);
+            document.getElementById('val-force').innerText = state.F;
+            
+            // Calc instant acceleration: a = F / m
+            state.a = state.F / state.m;
+            document.getElementById('stat-accel').innerText = `${state.a.toFixed(2)} m/s²`;
+            
+            if (!isRunning) draw();
+        }
+
+        function toggleSim() {
+            if (isRunning) {
+                stopSim();
+            } else {
+                startSim();
+            }
+        }
+
+        function startSim() {
+            isRunning = true;
+            document.getElementById('action-btn').innerText = "Stop / Reset";
+            document.getElementById('action-btn').classList.replace('bg-indigo-600', 'bg-red-600');
+            state.startTime = performance.now();
+            animate();
+        }
+
+        function stopSim() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            document.getElementById('action-btn').innerText = "Start Simulation";
+            document.getElementById('action-btn').classList.replace('bg-red-600', 'bg-indigo-600');
+            resetSim();
+        }
+
+        function resetSim() {
+            state.x = 50;
+            state.v = 0;
+            state.workDone = 0;
+            state.distanceMoved = 0;
+            updateControls();
+            draw();
+        }
+
+        function animate() {
+            if (!isRunning) return;
+
+            // Simple Euler Integration
+            // F = ma -> a = F/m
+            state.a = state.F / state.m;
+            
+            // v = u + at
+            state.v += state.a * state.dt;
+            
+            // x = ut + 0.5at^2 (approximate)
+            const dx = state.v * state.dt;
+            state.x += dx;
+            state.distanceMoved += dx;
+            
+            // Work = F * d
+            state.workDone = state.F * (state.distanceMoved / 10); // Scale distance for logical units
+
+            updateHUD();
+            checkVictory();
+            draw();
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-x').innerText = `${(state.x/10).toFixed(1)}m`;
+            document.getElementById('hud-v').innerText = `${state.v.toFixed(1)}m/s`;
+            document.getElementById('stat-work').innerText = `${state.workDone.toFixed(2)} J`;
+        }
+
+        function checkVictory() {
+            const lv = levels[currentLevel];
+            if (lv.target.condition(state)) {
+                isRunning = false;
+                cancelAnimationFrame(animationId);
+                document.getElementById('success-modal').classList.remove('hidden');
+                document.getElementById('success-desc').innerText = `Physics check: ${lv.title} verified!`;
+            }
+        }
+
+        function nextLevel() {
+            document.getElementById('success-modal').classList.add('hidden');
+            currentLevel = (currentLevel + 1) % levels.length;
+            initLevel();
+        }
+
+        function initLevel() {
+            const lv = levels[currentLevel];
+            document.getElementById('level-indicator').innerText = `${currentLevel + 1} / ${levels.length}`;
+            document.getElementById('mission-text').innerText = lv.mission;
+            lv.setup();
+            resetSim();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const centerY = canvas.height / 2;
+            const groundY = centerY + 60;
+
+            // Draw Grid
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            for(let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+
+            // Draw Target Zone if needed
+            if(levels[currentLevel].target.x > 0) {
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+                ctx.fillRect(levels[currentLevel].target.x, 0, canvas.width - levels[currentLevel].target.x, canvas.height);
+                ctx.strokeStyle = '#10b981';
+                ctx.setLineDash([10, 5]);
+                ctx.strokeRect(levels[currentLevel].target.x, 0, canvas.width - levels[currentLevel].target.x, canvas.height);
+                ctx.setLineDash([]);
+            }
+
+            // Draw Ground
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(canvas.width, groundY);
+            ctx.stroke();
+
+            // Draw Box (The Object)
+            const boxSize = 40 + (state.m * 2);
+            const boxX = state.x;
+            const boxY = groundY - boxSize;
+
+            // Box Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(boxX + 5, groundY - 5, boxSize, 10);
+
+            // Box Body
+            ctx.fillStyle = '#6366f1';
+            ctx.strokeStyle = '#818cf8';
+            ctx.lineWidth = 3;
+            ctx.fillRect(boxX, boxY, boxSize, boxSize);
+            ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+            // Box Mass Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${state.m}kg`, boxX + boxSize/2, boxY + boxSize/2 + 5);
+
+            // Draw Force Vector (Arrow)
+            if (state.F > 0) {
+                const arrowLength = state.F * 3;
+                const arrowX = boxX;
+                const arrowY = boxY + boxSize / 2;
+
+                ctx.strokeStyle = '#f43f5e';
+                ctx.fillStyle = '#f43f5e';
+                ctx.lineWidth = 4;
+
+                // Line
+                ctx.beginPath();
+                ctx.moveTo(arrowX - arrowLength, arrowY);
+                ctx.lineTo(arrowX - 5, arrowY);
+                ctx.stroke();
+
+                // Arrow Head
+                ctx.beginPath();
+                ctx.moveTo(arrowX - 5, arrowY);
+                ctx.lineTo(arrowX - 15, arrowY - 7);
+                ctx.lineTo(arrowX - 15, arrowY + 7);
+                ctx.fill();
+
+                // Vector Label
+                ctx.fillStyle = '#f43f5e';
+                ctx.fillText(`${state.F}N`, arrowX - arrowLength/2, arrowY - 15);
+            }
+
+            // Draw Velocity Vector
+            if (state.v > 0) {
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(boxX + boxSize, boxY + 10);
+                ctx.lineTo(boxX + boxSize + (state.v * 5), boxY + 10);
+                ctx.stroke();
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Start Game
+        window.onload = () => {
+            resizeCanvas();
+            initLevel();
+        };
+
+    </script>
+</body>
+</html>
+

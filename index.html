@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhySim Lab | Professional Science Hub</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav>
+        <div class="logo" onclick="showGallery()">PHYSIM LAB</div>
+        <div class="nav-links">
+            <span onclick="filterSims('9')">Class 9</span>
+            <span onclick="filterSims('10')">Class 10</span>
+        </div>
+    </nav>
+
+<main id="gallery-view" class="container">
+    <header class="hero">
+        <h1>Interactive Physics Sandbox</h1>
+        <p>Select a topic to start experimenting.</p>
+        
+        <div class="search-container">
+            <input type="text" id="simSearch" placeholder="Search topics (e.g., 'Gravity', 'Light')..." onkeyup="searchSims()">
+        </div>
+    </header>
+
+    <div class="grid" id="sim-grid">
+        <div class="card" data-class="10" onclick="launchSim('newton', 'newton.html')">
+            <div class="card-icon">🏎️</div>
+            <div class="card-body">
+                <span class="badge badge-10">Class 10</span>
+                <h3>Newton</h3>
+                <p>Explore the Newtown 2nd law of motion. ( no friction included) </p>
+            </div>
+        </div>
+        
+        
+        <div class="card" data-class="10" onclick="launchSim('Rays', 'ray.html')">
+            <div class="card-icon">🔦</div>
+            <div class="card-body">
+                <span class="badge badge-10">Class 10</span>
+                <h3>Lens</h3>
+                <p>Study the formation of image using concave & convex lens.</p>
+            </div>
+        </div>
+          <div class="card" data-class="10" onclick="launchSim('Refraction', 'refraction.html')">
+            <div class="card-icon">🌈</div>
+            <div class="card-body">
+                <span class="badge badge-10">Class 10</span>
+                <h3>Refraction of Light</h3>
+                <p>Study Snell's Law and Prisms.</p>
+            </div>
+        </div>
+        
+        
+    </div>
+</main>
+
+    <section id="sim-view" style="display: none;">
+        <div class="player-controls">
+            <button class="btn-back" onclick="showGallery()">← Back to Library</button>
+            <h2 id="current-sim-title">Simulation</h2>
+        </div>
+        
+        <div class="iframe-wrapper">
+            <iframe id="main-frame" src="" frameborder="0" allowfullscreen></iframe>
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>

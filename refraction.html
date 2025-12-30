@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Prism Refraction Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            background-color: #020617; 
+            color: #f8fafc; 
+            overflow: hidden; 
+            font-family: system-ui, -apple-system, sans-serif;
+            touch-action: none;
+        }
+        canvas { display: block; touch-action: none; background: #01040a; }
+        .panel { 
+            background: rgba(15, 23, 42, 0.95); 
+            backdrop-filter: blur(12px); 
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        input[type=range] { accent-color: #3b82f6; cursor: pointer; height: 1.5rem; }
+        .tab-btn { @apply px-3 py-1.5 rounded text-[10px] font-bold transition-all border border-transparent uppercase tracking-tighter; }
+        .tab-active { @apply bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-900/20; }
+        .tab-inactive { @apply bg-slate-800 text-slate-400 hover:bg-slate-700; }
+    </style>
+</head>
+<body class="flex flex-col h-screen select-none">
+
+    <!-- Header -->
+    <header id="main-header" class="p-3 flex justify-between items-center z-50 shrink-0 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+        <div>
+            <h1 class="text-lg font-black text-blue-400 tracking-tight uppercase leading-none">PRISM LAB</h1>
+            <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold mt-1">Refraction Sandbox</p>
+        </div>
+        <div class="flex gap-2">
+            <div class="hidden sm:flex bg-slate-800 p-1 rounded-lg">
+                <button onclick="setShape('equilateral')" id="btn-equilateral" class="tab-btn tab-active">Equilateral</button>
+                <button onclick="setShape('right_angle')" id="btn-right_angle" class="tab-btn tab-inactive">Right Angle</button>
+                <button onclick="setShape('slab')" id="btn-slab" class="tab-btn tab-inactive">Glass Slab</button>
+            </div>
+            <button id="reset-btn" class="bg-slate-700 px-3 py-1.5 rounded text-[10px] font-bold hover:bg-slate-600 transition-all border border-slate-600">RESET</button>
+        </div>
+    </header>
+
+    <!-- Simulation Space -->
+    <main class="relative flex-grow overflow-hidden">
+        <canvas id="prismCanvas"></canvas>
+        
+        <!-- Mobile Tabs -->
+        <div class="sm:hidden absolute top-4 left-4 right-4 flex justify-between bg-slate-900/90 p-1 rounded-lg border border-slate-700 z-10 backdrop-blur-md">
+            <button onclick="setShape('equilateral')" id="mob-equilateral" class="flex-1 py-2 text-[9px] font-bold uppercase text-blue-400">Prism</button>
+            <button onclick="setShape('right_angle')" id="mob-right_angle" class="flex-1 py-2 text-[9px] font-bold uppercase border-x border-slate-700 text-slate-400">Right Angle</button>
+            <button onclick="setShape('slab')" id="mob-slab" class="flex-1 py-2 text-[9px] font-bold uppercase text-slate-400">Slab</button>
+        </div>
+
+        <div class="absolute bottom-4 right-4 bg-black/60 px-3 py-1 rounded-full text-[10px] font-mono text-blue-400 border border-white/10 pointer-events-none z-10">
+            Scale: <span id="zoom-readout">100%</span>
+        </div>
+
+        <!-- Hint -->
+        <div class="absolute top-16 left-4 pointer-events-none opacity-60 hidden md:block">
+            <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest bg-black/40 px-2 py-1 rounded">Tap anywhere to move source</p>
+        </div>
+    </main>
+
+    <!-- Controls -->
+    <footer id="control-panel" class="panel shrink-0 p-4 z-20">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="flex flex-col">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-black text-blue-300 uppercase italic">Refractive Index ($n$)</label>
+                        <span class="text-[10px] font-mono text-white bg-slate-800 px-2 rounded" id="n-val">1.50</span>
+                    </div>
+                    <input type="range" id="n-slider" min="1.0" max="2.6" step="0.01" value="1.50" class="w-full">
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-black text-blue-300 uppercase italic">Beam Angle</label>
+                        <span class="text-[10px] font-mono text-white bg-slate-800 px-2 rounded" id="angle-val">0°</span>
+                    </div>
+                    <input type="range" id="angle-slider" min="-180" max="180" step="0.5" value="0" class="w-full">
+                </div>
+            </div>
+
+            <div class="flex gap-6 justify-center py-2 md:border-x border-slate-700">
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="dispersion-toggle" class="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-600">
+                    <span class="text-[10px] font-bold text-slate-300 uppercase group-hover:text-white transition-colors">Dispersion</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="normal-toggle" checked class="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-600">
+                    <span class="text-[10px] font-bold text-slate-300 uppercase group-hover:text-white transition-colors">Normals</span>
+                </label>
+            </div>
+
+            <div class="flex justify-around items-center bg-blue-950/20 p-2 rounded-xl border border-blue-500/10">
+                <div class="text-center">
+                    <p class="text-[8px] text-slate-500 font-bold uppercase mb-1">Critical Angle</p>
+                    <p id="critical-readout" class="text-xs font-mono text-blue-300">41.8°</p>
+                </div>
+                <div class="text-center border-l border-slate-700 pl-4">
+                    <p class="text-[8px] text-slate-500 font-bold uppercase mb-1">Status</p>
+                    <p id="status-readout" class="text-[9px] font-black text-green-400 uppercase">REFRACTION</p>
+                </div>
+            </div>
+
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('prismCanvas');
+        const ctx = canvas.getContext('2d');
+        const nSlider = document.getElementById('n-slider');
+        const angleSlider = document.getElementById('angle-slider');
+        const nVal = document.getElementById('n-val');
+        const angleVal = document.getElementById('angle-val');
+        const dispersionToggle = document.getElementById('dispersion-toggle');
+        const normalToggle = document.getElementById('normal-toggle');
+        const zoomReadout = document.getElementById('zoom-readout');
+
+        let width, height, centerX, centerY;
+        let nBase = 1.5;
+        let currentShape = 'equilateral';
+        let prismPoints = []; 
+        let sourcePos = { x: -300, y: 0 };
+        let scale = 1.0;
+        let isDraggingSource = false;
+        let lastTouchDist = 0;
+
+        const VIBGYOR = [
+            { color: '#ff4444', nOffset: -0.02 },
+            { color: '#ffaa44', nOffset: -0.01 },
+            { color: '#ffff44', nOffset: 0.00 },
+            { color: '#44ff44', nOffset: 0.01 },
+            { color: '#44ffff', nOffset: 0.02 },
+            { color: '#4444ff', nOffset: 0.03 },
+            { color: '#aa44ff', nOffset: 0.04 }
+        ];
+
+        function setShape(shape) {
+            currentShape = shape;
+            const size = 250;
+            
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.replace('tab-active', 'tab-inactive'));
+            const activeBtn = document.getElementById('btn-' + shape);
+            if(activeBtn) activeBtn.classList.replace('tab-inactive', 'tab-active');
+
+            ['equilateral', 'right_angle', 'slab'].forEach(s => {
+                const el = document.getElementById('mob-' + s);
+                if (el) el.style.color = (s === shape) ? '#60a5fa' : '#94a3b8';
+            });
+
+            if (shape === 'equilateral') {
+                const h = size * Math.sqrt(3) / 2;
+                prismPoints = [{ x: -size/2, y: h/3 }, { x: 0, y: -2*h/3 }, { x: size/2, y: h/3 }];
+            } else if (shape === 'right_angle') {
+                prismPoints = [{ x: -size/2, y: size/2 }, { x: -size/2, y: -size/2 }, { x: size/2, y: size/2 }];
+            } else if (shape === 'slab') {
+                const w = size * 1.5;
+                const h = size * 0.8;
+                prismPoints = [{ x: -w/2, y: h/2 }, { x: -w/2, y: -h/2 }, { x: w/2, y: -h/2 }, { x: w/2, y: h/2 }];
+            }
+        }
+
+        function resize() {
+            const h = document.getElementById('main-header').offsetHeight || 64;
+            const f = document.getElementById('control-panel').offsetHeight || 150;
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight - h - f;
+            centerX = width / 2;
+            centerY = height / 2;
+            setShape(currentShape);
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('load', resize);
+
+        function dot(v1, v2) { return v1.x * v2.x + v1.y * v2.y; }
+        function normalize(v) { const len = Math.hypot(v.x, v.y); return { x: v.x/len, y: v.y/len }; }
+        
+        function intersect(p1, p2, p3, p4) {
+            const den = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+            if (den === 0) return null;
+            const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / den;
+            const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / den;
+            if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+                let nx = p4.y - p3.y;
+                let ny = p3.x - p4.x;
+                const len = Math.hypot(nx, ny);
+                return { x: p1.x + ua * (p2.x - p1.x), y: p1.y + ua * (p2.y - p1.y), nx: nx / len, ny: ny / len };
+            }
+            return null;
+        }
+
+        function traceRayVector(start, dir, refractiveIndexGlass, depth = 0, color = '#fff') {
+            if (depth > 12) return;
+            const far = { x: start.x + dir.x * 5000, y: start.y + dir.y * 5000 };
+            let closest = null; let minDist = Infinity; let normal = null;
+
+            for (let i = 0; i < prismPoints.length; i++) {
+                const pA = prismPoints[i];
+                const pB = prismPoints[(i + 1) % prismPoints.length];
+                const hit = intersect(start, far, pA, pB);
+                if (hit) {
+                    const d = Math.hypot(hit.x - start.x, hit.y - start.y);
+                    if (d < minDist && d > 0.001) { minDist = d; closest = hit; normal = { x: hit.nx, y: hit.ny }; }
+                }
+            }
+
+            if (!closest) {
+                ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.5 / scale;
+                ctx.moveTo(start.x, start.y); ctx.lineTo(far.x, far.y); ctx.stroke();
+                return;
+            }
+
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.5 / scale;
+            ctx.moveTo(start.x, start.y); ctx.lineTo(closest.x, closest.y); ctx.stroke();
+
+            const dotProd = dot(dir, normal);
+            let n1, n2, effNormal;
+            if (dotProd < 0) { n1 = 1.0; n2 = refractiveIndexGlass; effNormal = normal; } 
+            else { n1 = refractiveIndexGlass; n2 = 1.0; effNormal = { x: -normal.x, y: -normal.y }; }
+
+            const r = n1 / n2;
+            const c = -dot(dir, effNormal);
+            const discriminant = 1.0 - r * r * (1.0 - c * c);
+
+            let newDir;
+            if (discriminant < 0) {
+                if (depth === 0 || color === '#ffffff' || color === '#ffff44') {
+                    document.getElementById('status-readout').innerText = "T.I.R.";
+                    document.getElementById('status-readout').className = "text-[9px] font-black text-red-400 uppercase";
+                }
+                const dN = dot(dir, normal);
+                newDir = { x: dir.x - 2 * dN * normal.x, y: dir.y - 2 * dN * normal.y };
+            } else {
+                const scalar = r * c - Math.sqrt(discriminant);
+                newDir = normalize({ x: r * dir.x + scalar * effNormal.x, y: r * dir.y + scalar * effNormal.y });
+                if (normalToggle.checked && depth < 2) drawNormal(closest, normal);
+            }
+            const nudge = { x: closest.x + newDir.x * 0.01, y: closest.y + newDir.y * 0.01 };
+            traceRayVector(nudge, newDir, refractiveIndexGlass, depth + 1, color);
+        }
+
+        function drawNormal(pos, n) {
+            ctx.save();
+            ctx.setLineDash([5/scale, 5/scale]);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1/scale;
+            ctx.beginPath();
+            ctx.moveTo(pos.x - n.x * 40, pos.y - n.y * 40);
+            ctx.lineTo(pos.x + n.x * 40, pos.y + n.y * 40);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawPrism() {
+            ctx.fillStyle = 'rgba(100, 180, 255, 0.15)';
+            ctx.strokeStyle = 'rgba(120, 200, 255, 0.6)';
+            ctx.lineWidth = 3 / scale;
+            ctx.beginPath();
+            ctx.moveTo(prismPoints[0].x, prismPoints[0].y);
+            for (let i = 1; i < prismPoints.length; i++) ctx.lineTo(prismPoints[i].x, prismPoints[i].y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function getMouseWorld(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            return { x: (x - centerX) / scale, y: (y - centerY) / scale };
+        }
+
+        const handleStart = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                lastTouchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                return;
+            }
+            const pos = getMouseWorld(e);
+            // Move source to tap location
+            sourcePos.x = pos.x;
+            sourcePos.y = pos.y;
+            isDraggingSource = true;
+        };
+
+        const handleMove = (e) => {
+            const pos = getMouseWorld(e);
+            if (e.touches && e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                if (lastTouchDist > 0) {
+                    scale = Math.max(0.2, Math.min(5.0, scale + (dist - lastTouchDist) * 0.01));
+                    zoomReadout.innerText = Math.round(scale * 100) + '%';
+                }
+                lastTouchDist = dist;
+                return;
+            }
+            if (isDraggingSource) {
+                // Keep within world bounds relative to canvas visible area
+                const boundX = (width/2)/scale - 20/scale;
+                const boundY = (height/2)/scale - 20/scale;
+                sourcePos.x = Math.max(-boundX, Math.min(boundX, pos.x));
+                sourcePos.y = Math.max(-boundY, Math.min(boundY, pos.y));
+            }
+        };
+
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', () => { isDraggingSource = false; lastTouchDist = 0; });
+        canvas.addEventListener('touchstart', handleStart, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { if(isDraggingSource || e.touches.length > 1) e.preventDefault(); handleMove(e); }, { passive: false });
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            scale = Math.max(0.2, Math.min(5.0, scale - e.deltaY * 0.001));
+            zoomReadout.innerText = Math.round(scale * 100) + '%';
+        }, { passive: false });
+
+        function loop() {
+            ctx.clearRect(0, 0, width, height);
+            nBase = parseFloat(nSlider.value);
+            const angleDeg = parseFloat(angleSlider.value);
+            const angleRad = angleDeg * (Math.PI / 180);
+            const dir = { x: Math.cos(angleRad), y: Math.sin(angleRad) };
+
+            nVal.innerText = nBase.toFixed(2);
+            angleVal.innerText = Math.round(angleDeg) + '°';
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.scale(scale, scale);
+
+            drawPrism();
+
+            ctx.fillStyle = isDraggingSource ? '#60a5fa' : '#fff';
+            ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
+            ctx.beginPath(); ctx.arc(sourcePos.x, sourcePos.y, 8 / scale, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            document.getElementById('status-readout').innerText = "REFRACTION";
+            document.getElementById('status-readout').className = "text-[9px] font-black text-green-400 uppercase";
+
+            if (dispersionToggle.checked) {
+                VIBGYOR.forEach(ray => traceRayVector(sourcePos, dir, nBase + ray.nOffset, 0, ray.color));
+            } else {
+                traceRayVector(sourcePos, dir, nBase, 0, '#ffffff');
+            }
+
+            ctx.restore();
+
+            const crit = Math.asin(1 / nBase) * (180 / Math.PI);
+            document.getElementById('critical-readout').innerText = crit.toFixed(1) + '°';
+            requestAnimationFrame(loop);
+        }
+
+        document.getElementById('reset-btn').onclick = () => {
+            nSlider.value = 1.5; angleSlider.value = 0;
+            sourcePos = { x: -300, y: 0 }; scale = 1.0;
+            zoomReadout.innerText = '100%'; setShape('equilateral');
+        };
+
+        resize();
+        loop();
+    </script>
+</body>
+</html>
+

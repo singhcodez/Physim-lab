@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ray Optics Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            background-color: #020617; 
+            color: #f8fafc; 
+            overflow: hidden; 
+            font-family: system-ui, -apple-system, sans-serif;
+            touch-action: none;
+        }
+        canvas { display: block; touch-action: none; }
+        .panel { 
+            background: rgba(15, 23, 42, 0.95); 
+            backdrop-filter: blur(12px); 
+        }
+        input[type=range] { accent-color: #3b82f6; cursor: pointer; }
+        .control-group { @apply flex flex-col gap-0.5; }
+        
+        #control-panel::-webkit-scrollbar { height: 4px; }
+        #control-panel::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex flex-col h-screen select-none">
+
+    <!-- Header -->
+    <header id="main-header" class="panel p-3 md:p-4 flex justify-between items-center z-20 shrink-0 border-b border-slate-800">
+        <div class="flex flex-col">
+            <h1 class="text-lg md:text-xl font-black text-blue-400 tracking-tight uppercase">OPTICS LAB</h1>
+            <p class="text-[9px] md:text-[10px] text-slate-400 uppercase tracking-widest font-bold">Thin Lens & Mirror Simulation</p>
+        </div>
+        <div class="flex gap-2">
+            <select id="optic-type" class="bg-slate-900 text-[10px] md:text-xs p-2 rounded border border-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-colors">
+                <option value="convex_lens">Convex Lens</option>
+                <option value="concave_lens">Concave Lens</option>
+                <option value="convex_mirror">Convex Mirror</option>
+                <option value="concave_mirror">Concave Mirror</option>
+            </select>
+            <button id="reset-btn" class="bg-slate-800 px-3 py-1 rounded text-[10px] md:text-xs font-bold hover:bg-slate-700 active:scale-95 transition-all">RESET</button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="relative flex-grow overflow-hidden bg-[#01040a]">
+        <canvas id="opticsCanvas"></canvas>
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer id="control-panel" class="panel border-t border-slate-800 shrink-0 p-3 md:p-5 z-20">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row gap-4 md:gap-8 items-center justify-between">
+            
+            <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto flex-grow max-w-2xl">
+                <div class="flex-grow">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-black text-blue-300 uppercase italic">Focal Length ($f$)</label>
+                        <span class="text-[10px] font-mono text-white bg-slate-800 px-2 rounded" id="f-val">100px</span>
+                    </div>
+                    <input type="range" id="f-slider" min="30" max="250" value="100" class="w-full">
+                </div>
+                
+                <div class="flex-grow">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-black text-blue-300 uppercase italic">Object Position ($u$)</label>
+                        <span class="text-[10px] font-mono text-white bg-slate-800 px-2 rounded" id="u-val">180px</span>
+                    </div>
+                    <input type="range" id="u-slider" min="5" max="800" value="180" class="w-full">
+                </div>
+            </div>
+
+            <div class="flex gap-4 md:gap-8 items-center shrink-0">
+                <div class="grid grid-cols-3 gap-3 text-center border-x border-slate-800 px-4">
+                    <div class="control-group">
+                        <span class="text-[8px] text-slate-500 font-bold uppercase">Dist ($u$)</span>
+                        <span id="u-readout" class="text-xs font-mono text-blue-300">0</span>
+                    </div>
+                    <div class="control-group">
+                        <span class="text-[8px] text-slate-500 font-bold uppercase">Dist ($v$)</span>
+                        <span id="v-readout" class="text-xs font-mono text-green-400">0</span>
+                    </div>
+                    <div class="control-group">
+                        <span class="text-[8px] text-slate-500 font-bold uppercase">Mag ($m$)</span>
+                        <span id="m-readout" class="text-xs font-mono text-yellow-400">0</span>
+                    </div>
+                </div>
+
+                <div class="hidden sm:flex flex-col items-end">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[9px] text-slate-500 uppercase font-black">Scale</span>
+                        <span id="zoom-readout" class="text-[10px] font-mono text-blue-400 bg-blue-500/10 px-1 rounded">100%</span>
+                    </div>
+                    <p class="text-[8px] text-slate-500">Pinch or Scroll to Zoom</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('opticsCanvas');
+        const ctx = canvas.getContext('2d');
+        const fSlider = document.getElementById('f-slider');
+        const uSlider = document.getElementById('u-slider');
+        const fValReadout = document.getElementById('f-val');
+        const uValReadout = document.getElementById('u-val');
+        const zoomReadout = document.getElementById('zoom-readout');
+        const opticType = document.getElementById('optic-type');
+
+        let width, height;
+        let centerX, centerY;
+        let f = 100;
+        let objX = -180; 
+        let isDragging = false;
+        let objHeight = -60;
+        let scale = 1.0;
+        const MIN_SCALE = 0.15;
+        const MAX_SCALE = 4.0;
+        let lastTouchDist = 0;
+
+        function resize() {
+            const header = document.getElementById('main-header');
+            const footer = document.getElementById('control-panel');
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight - header.offsetHeight - footer.offsetHeight;
+            centerX = width / 2;
+            centerY = height / 2;
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('load', resize);
+        resize();
+
+        const screenToWorld = (screenX, screenY) => {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (screenX - rect.left - centerX) / scale,
+                y: (screenY - rect.top - centerY) / scale
+            };
+        };
+
+        const handleStart = (e) => {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const rect = canvas.getBoundingClientRect();
+            if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
+
+            const worldPos = screenToWorld(clientX, clientY);
+            const dist = Math.abs(worldPos.x - objX);
+            const yDist = Math.abs(worldPos.y);
+            
+            // Interaction logic: Allow dragging the arrow
+            if (dist < 50 && yDist < 150) {
+                isDragging = true;
+            }
+            
+            if (e.touches && e.touches.length === 2) {
+                lastTouchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            }
+        };
+
+        const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                if (lastTouchDist > 0) {
+                    applyZoom((dist - lastTouchDist) * 0.01);
+                }
+                lastTouchDist = dist;
+                return;
+            }
+
+            if (!isDragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const worldPos = screenToWorld(clientX, 0);
+            objX = Math.min(-5, worldPos.x);
+            uSlider.value = Math.abs(objX);
+        };
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            applyZoom(-e.deltaY * 0.001);
+        }, { passive: false });
+
+        function applyZoom(delta) {
+            scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale + delta));
+            if(zoomReadout) zoomReadout.innerText = Math.round(scale * 100) + '%';
+        }
+
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mouseup', () => { isDragging = false; lastTouchDist = 0; });
+        window.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchstart', (e) => { if (e.touches.length < 2) handleStart(e); }, { passive: false });
+        window.addEventListener('touchmove', handleMove, { passive: false });
+
+        uSlider.addEventListener('input', (e) => { objX = -parseFloat(e.target.value); });
+        fSlider.addEventListener('input', (e) => { f = parseFloat(e.target.value); });
+
+        function solveOptics() {
+            const type = opticType.value;
+            const u = objX; 
+            const isLens = type.includes('lens');
+            let actualF = f;
+            
+            if (type === 'concave_lens' || type === 'concave_mirror') actualF = -f;
+            if (type === 'convex_mirror') actualF = f;
+
+            let v, m;
+            if (isLens) {
+                // 1/v - 1/u = 1/f
+                v = 1 / ((1 / actualF) + (1 / u));
+                m = v / u;
+            } else {
+                // 1/v + 1/u = 1/f
+                v = 1 / ((1 / actualF) - (1 / u));
+                m = -(v / u);
+            }
+
+            return { u, v, m, type, f: actualF, isLens };
+        }
+
+        function drawPrincipalAxis() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1.5 / scale;
+            ctx.setLineDash([]);
+            
+            // Main Line
+            ctx.beginPath();
+            ctx.moveTo(-width/scale, 0);
+            ctx.lineTo(width/scale, 0);
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = `${10/scale}px monospace`;
+            ctx.textAlign = 'right';
+            ctx.fillText('PRINCIPAL AXIS', (width/2 - 20)/scale, -10/scale);
+        }
+
+        function drawPrincipalRays(data) {
+            const { u, v, m, type, isLens } = data;
+            const imgH = objHeight * m;
+            ctx.lineWidth = 1.5 / scale;
+            
+            // Parallel Ray -> Through F
+            ctx.setLineDash([]);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.moveTo(u, objHeight);
+            ctx.lineTo(0, objHeight);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, objHeight);
+            if (isLens) {
+                const ext = 2000;
+                const slope = (imgH - objHeight) / (v || 1e-9);
+                ctx.lineTo(v + ext, objHeight + slope * (v + ext));
+            } else {
+                // Mirror reflection passes through V
+                ctx.lineTo(v, imgH);
+                const ext = (v < 0) ? -2000 : 2000;
+                const slope = imgH / (v || 1e-9);
+                ctx.lineTo(v + ext, imgH + (slope * ext));
+            }
+            ctx.stroke();
+
+            // Center Ray (Optical Center / Pole)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.setLineDash([5/scale, 5/scale]);
+            ctx.beginPath();
+            ctx.moveTo(u, objHeight);
+            if (isLens) {
+                ctx.lineTo(v, imgH);
+            } else {
+                ctx.lineTo(0, 0); 
+                ctx.lineTo(v, imgH);
+            }
+            ctx.stroke();
+
+            // Virtual Extensions (Dashed Red)
+            const isVirtual = isLens ? (v < 0) : (v > 0);
+            if (isVirtual && isFinite(v)) {
+                ctx.strokeStyle = '#f87171';
+                ctx.setLineDash([3/scale, 3/scale]);
+                ctx.beginPath(); ctx.moveTo(0, objHeight); ctx.lineTo(v, imgH); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(v, imgH); ctx.stroke();
+            }
+        }
+
+        function drawComponent(type) {
+            ctx.strokeStyle = '#60a5fa';
+            ctx.lineWidth = 4 / scale;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            const h = 200;
+            if (type === 'convex_lens') {
+                ctx.moveTo(0, -h); ctx.quadraticCurveTo(40, 0, 0, h); ctx.quadraticCurveTo(-40, 0, 0, -h);
+            } else if (type === 'concave_lens') {
+                ctx.moveTo(-30, -h); ctx.lineTo(30, -h); ctx.quadraticCurveTo(-15, 0, 30, h);
+                ctx.lineTo(-30, h); ctx.quadraticCurveTo(15, 0, -30, -h);
+            } else {
+                const isConvex = type.includes('convex');
+                const curve = isConvex ? -50 : 50;
+                ctx.moveTo(0, -h); ctx.quadraticCurveTo(curve, 0, 0, h);
+                ctx.stroke();
+                // Silvering
+                ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
+                ctx.lineWidth = 1 / scale;
+                ctx.beginPath();
+                for(let i = -h; i < h; i+=12) {
+                    ctx.moveTo(isConvex ? -5 : 5, i); ctx.lineTo(isConvex ? 10 : -10, i + 6);
+                }
+            }
+            ctx.stroke();
+
+            // Center Mark (O or P)
+            ctx.fillStyle = '#60a5fa';
+            ctx.beginPath(); ctx.arc(0, 0, 4/scale, 0, Math.PI*2); ctx.fill();
+            ctx.font = `bold ${12/scale}px Arial`;
+            ctx.fillText(type.includes('lens') ? 'O' : 'P', 10/scale, -10/scale);
+        }
+
+        function drawArrow(x, h, color, label, isDashed = false) {
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 3 / scale;
+            if (isDashed) ctx.setLineDash([4/scale, 4/scale]); else ctx.setLineDash([]);
+            
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+
+            const arrowSize = 10 / scale;
+            const dir = h < 0 ? 1 : -1;
+            ctx.beginPath();
+            ctx.moveTo(x - arrowSize/1.5, h + (dir * arrowSize));
+            ctx.lineTo(x, h);
+            ctx.lineTo(x + arrowSize/1.5, h + (dir * arrowSize));
+            ctx.fill();
+
+            ctx.setLineDash([]);
+            ctx.font = `bold ${Math.max(10, 13/scale)}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText(label, x, h + (h > 0 ? 18/scale : -18/scale));
+        }
+
+        function loop() {
+            ctx.fillStyle = '#01040a';
+            ctx.fillRect(0, 0, width, height);
+
+            fValReadout.innerText = f.toFixed(0) + 'px';
+            uValReadout.innerText = Math.abs(objX).toFixed(0) + 'px';
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.scale(scale, scale);
+
+            drawPrincipalAxis();
+
+            const data = solveOptics();
+            const focal = Math.abs(data.f);
+            
+            // Mark Foci and Center of Curvature
+            const drawPoint = (pos, label, color = '#facc15') => {
+                ctx.fillStyle = color;
+                ctx.beginPath(); ctx.arc(pos, 0, 4/scale, 0, Math.PI*2); ctx.fill();
+                ctx.font = `bold ${11/scale}px Arial`;
+                ctx.fillText(label, pos, 25/scale);
+            };
+
+            // Signage based on component
+            if (data.isLens) {
+                drawPoint(-focal, 'F1'); drawPoint(focal, 'F2');
+                drawPoint(-2*focal, '2F1'); drawPoint(2*focal, '2F2');
+            } else {
+                // Mirror
+                const isConvex = data.type.includes('convex');
+                const dir = isConvex ? 1 : -1;
+                drawPoint(dir * focal, 'F');
+                drawPoint(dir * 2 * focal, 'C');
+            }
+
+            drawComponent(data.type);
+            drawPrincipalRays(data);
+            
+            // Object Arrow with selection glow
+            if (isDragging) {
+                ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+            }
+            drawArrow(data.u, objHeight, '#38bdf8', 'OBJECT');
+            ctx.shadowBlur = 0;
+
+            // Image Arrow
+            if (isFinite(data.v) && Math.abs(data.v) < 10000) {
+                const isVirtual = data.isLens ? (data.v < 0) : (data.v > 0);
+                const color = isVirtual ? '#f87171' : '#4ade80';
+                drawArrow(data.v, objHeight * data.m, color, isVirtual ? 'VIRTUAL IMG' : 'REAL IMG', isVirtual);
+            }
+
+            ctx.restore();
+
+            document.getElementById('u-readout').innerText = Math.abs(data.u).toFixed(0);
+            document.getElementById('v-readout').innerText = (isFinite(data.v) && Math.abs(data.v) < 10000) ? Math.abs(data.v).toFixed(0) : '∞';
+            document.getElementById('m-readout').innerText = isFinite(data.m) ? Math.abs(data.m).toFixed(2) : '∞';
+
+            requestAnimationFrame(loop);
+        }
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            objX = -180; f = 100; scale = 1.0;
+            uSlider.value = 180; fSlider.value = 100;
+            if(zoomReadout) zoomReadout.innerText = '100%';
+            opticType.value = 'convex_lens';
+        });
+
+        loop();
+    </script>
+</body>
+</html>
+
