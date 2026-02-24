@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Advanced Projectile Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+
+        body {
+            background-color: #020617; /* Slate 950 */
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .data-font { font-family: 'JetBrains Mono', monospace; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #38bdf8;
+            margin-top: -8px;
+            cursor: pointer;
+            border: 2px solid #0f172a;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        .lab-grid {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        @keyframes recoil {
+            0% { transform: translateX(0); }
+            20% { transform: translateX(-10px); }
+            100% { transform: translateX(0); }
+        }
+        .animate-recoil { animation: recoil 0.2s ease-out; }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen">
+
+    <!-- HEADER -->
+    <header class="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0 z-20 shadow-lg">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600/20 p-2 rounded-lg">
+                <i data-lucide="crosshair" class="text-blue-400 w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-slate-100 tracking-tight text-lg leading-none">PROJECTILE LAB <span class="text-xs text-blue-400 font-normal">PRO</span></h1>
+            </div>
+        </div>
+        
+        <div class="flex gap-2">
+            <!-- Object Selector -->
+            <div class="hidden md:flex items-center gap-2 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
+                <i data-lucide="package" class="w-4 h-4 text-slate-400 ml-1"></i>
+                <select id="object-select" class="bg-transparent text-xs font-bold text-slate-200 outline-none cursor-pointer pr-2">
+                    <option value="cannonball">Cannonball (10kg)</option>
+                    <option value="golfball">Golf Ball (0.05kg)</option>
+                    <option value="pumpkin">Pumpkin (5kg)</option>
+                    <option value="piano">Piano (400kg)</option>
+                </select>
+            </div>
+
+            <!-- Environment Selector -->
+            <div class="flex items-center gap-2 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
+                <i data-lucide="globe" class="w-4 h-4 text-slate-400 ml-1"></i>
+                <select id="planet-select" class="bg-transparent text-xs font-bold text-slate-200 outline-none cursor-pointer pr-2">
+                    <option value="9.8" selected>EARTH</option>
+                    <option value="1.62">MOON</option>
+                    <option value="3.71">MARS</option>
+                    <option value="24.79">JUPITER</option>
+                    <option value="0">SPACE</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        
+        <!-- CANVAS WRAPPER -->
+        <div class="flex-1 relative bg-slate-950 lab-grid overflow-hidden cursor-crosshair group min-h-[50vh] order-1" id="canvas-wrapper">
+            <canvas id="simCanvas" class="block w-full h-full touch-none"></canvas>
+
+            <!-- HUD: Real-time Data -->
+            <div class="absolute top-4 left-4 bg-slate-900/90 backdrop-blur border border-slate-700 p-4 rounded-xl shadow-2xl w-auto md:w-64 z-10 scale-90 origin-top-left md:scale-100 transition-opacity pointer-events-none">
+                <div class="grid grid-cols-2 md:grid-cols-1 gap-y-2 gap-x-6">
+                    <div class="flex flex-col md:flex-row justify-between items-baseline">
+                        <span class="text-xs text-blue-300 font-bold uppercase tracking-wider">Range</span>
+                        <span id="data-range" class="data-font text-lg font-bold text-white">0.0 <span class="text-xs text-slate-500">m</span></span>
+                    </div>
+                    <div class="flex flex-col md:flex-row justify-between items-baseline">
+                        <span class="text-xs text-green-300 font-bold uppercase tracking-wider">Height</span>
+                        <span id="data-height" class="data-font text-lg font-bold text-white">0.0 <span class="text-xs text-slate-500">m</span></span>
+                    </div>
+                    <div class="flex flex-col md:flex-row justify-between items-baseline">
+                        <span class="text-xs text-amber-300 font-bold uppercase tracking-wider">Time</span>
+                        <span id="data-time" class="data-font text-lg font-bold text-white">0.0 <span class="text-xs text-slate-500">s</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vector Legend -->
+            <div class="absolute top-4 right-4 flex flex-col gap-2 items-end pointer-events-none opacity-0 md:opacity-100 transition-opacity" id="vector-legend">
+                <div class="flex items-center gap-2 bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
+                    <span class="text-[10px] text-slate-300">Velocity</span>
+                    <div class="w-8 h-0.5 bg-green-400"></div>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
+                    <span class="text-[10px] text-slate-300">Acceleration</span>
+                    <div class="w-8 h-0.5 bg-yellow-400"></div>
+                </div>
+            </div>
+
+            <!-- Zoom Indicator -->
+            <div class="absolute bottom-4 right-4 bg-slate-900/50 px-3 py-1 rounded-full text-[10px] text-slate-500 border border-slate-800 pointer-events-none">
+                Auto-Zoom: <span id="zoom-level">1.0x</span>
+            </div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="w-full md:w-80 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 p-5 flex flex-col gap-5 shadow-2xl z-20 shrink-0 overflow-y-auto h-[45vh] md:h-auto order-2">
+            
+            <!-- Mobile Object Selector (Visible only on mobile) -->
+            <div class="md:hidden">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Projectile Object</label>
+                <div class="flex items-center gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700">
+                    <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
+                    <select id="object-select-mobile" class="bg-transparent text-xs font-bold text-slate-200 outline-none w-full">
+                        <option value="cannonball">Cannonball</option>
+                        <option value="golfball">Golf Ball</option>
+                        <option value="pumpkin">Pumpkin</option>
+                        <option value="piano">Piano</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="space-y-4">
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-bold text-slate-400 uppercase">Velocity</label>
+                        <span id="val-speed" class="data-font text-xs text-blue-400 font-bold">15 m/s</span>
+                    </div>
+                    <input type="range" id="input-speed" min="1" max="50" step="0.5" value="15">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-bold text-slate-400 uppercase">Angle</label>
+                        <span id="val-angle" class="data-font text-xs text-purple-400 font-bold">45°</span>
+                    </div>
+                    <input type="range" id="input-angle" min="0" max="90" step="1" value="45" class="accent-purple-500">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-bold text-slate-400 uppercase">Height</label>
+                        <span id="val-elevation" class="data-font text-xs text-emerald-400 font-bold">0 m</span>
+                    </div>
+                    <input type="range" id="input-elevation" min="0" max="20" step="1" value="0" class="accent-emerald-500">
+                </div>
+            </div>
+
+            <!-- Physics Toggles -->
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btn-vectors" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-300 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+                    <i data-lucide="arrow-up-right" class="w-3 h-3"></i> Vectors
+                </button>
+                <button id="btn-components" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-300 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+                    <i data-lucide="grid" class="w-3 h-3"></i> Components
+                </button>
+                <button id="btn-slowmo" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-300 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+                    <i data-lucide="clock" class="w-3 h-3"></i> Slow Mo
+                </button>
+                <button id="btn-air" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-300 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+                    <i data-lucide="wind" class="w-3 h-3"></i> Air Drag
+                </button>
+            </div>
+
+            <!-- Fire Button -->
+            <div class="mt-auto flex gap-2 pt-2">
+                <button id="btn-fire" class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-900/20 transition active:scale-[0.98] flex items-center justify-center gap-2 group">
+                    <i data-lucide="crosshair" class="w-5 h-5 group-hover:rotate-45 transition-transform"></i> 
+                    FIRE
+                </button>
+                <button id="btn-clear" class="w-12 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center justify-center transition active:scale-95">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS LOGIC -->
+    <script>
+        // --- Configuration & Constants ---
+        const BASE_SCALE = 20; // 20 pixels per meter
+        const OBJECTS = {
+            cannonball: { color: '#1e293b', mass: 10, radius: 0.15, cd: 0.47, label: "Cannonball" },
+            golfball:   { color: '#ffffff', mass: 0.05, radius: 0.05, cd: 0.3, label: "Golf Ball" },
+            pumpkin:    { color: '#f97316', mass: 5, radius: 0.3, cd: 0.8, label: "Pumpkin" },
+            piano:      { color: '#000000', mass: 400, radius: 1.0, cd: 1.1, label: "Piano" }
+        };
+
+        const STATE = {
+            v0: 15,
+            angle: 45,
+            height: 0,
+            g: 9.8,
+            object: 'cannonball',
+            slowMo: false,
+            airResist: false,
+            showVectors: false,
+            showComponents: false,
+            projectiles: [],
+            traces: [],
+            target: { x: 20, dragging: false },
+            camX: 0,
+            camY: 0,
+            scale: 1.0,
+            targetScale: 1.0
+        };
+
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let lastTime = 0;
+
+        // --- UI References ---
+        const ui = {
+            speed: document.getElementById('input-speed'),
+            angle: document.getElementById('input-angle'),
+            elevation: document.getElementById('input-elevation'),
+            planet: document.getElementById('planet-select'),
+            objSelect: document.getElementById('object-select'),
+            objSelectMob: document.getElementById('object-select-mobile'),
+            valSpeed: document.getElementById('val-speed'),
+            valAngle: document.getElementById('val-angle'),
+            valElevation: document.getElementById('val-elevation'),
+            dataRange: document.getElementById('data-range'),
+            dataHeight: document.getElementById('data-height'),
+            dataTime: document.getElementById('data-time'),
+            zoomLevel: document.getElementById('zoom-level'),
+            btnVectors: document.getElementById('btn-vectors'),
+            btnComponents: document.getElementById('btn-components'),
+            btnSlowMo: document.getElementById('btn-slowmo'),
+            btnAir: document.getElementById('btn-air')
+        };
+
+        // --- Core Functions ---
+
+        function resize() {
+            if(!canvas.parentElement) return;
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+            
+            // Trigger a redraw immediately
+            draw();
+        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+
+        // Coordinate Transforms
+        function worldToScreen(x, y) {
+            // Safety check for initialization
+            if(!height) return {x: 0, y: 0};
+
+            const pxPerM = BASE_SCALE * STATE.scale;
+            // Origin is bottom-left (50px padding)
+            const originX = 50 - (STATE.camX * pxPerM);
+            const originY = height - 50 + (STATE.camY * pxPerM);
+            
+            return {
+                x: originX + x * pxPerM,
+                y: originY - y * pxPerM
+            };
+        }
+
+        function screenToWorld(x, y) {
+            if(!height) return 0;
+            const pxPerM = BASE_SCALE * STATE.scale;
+            const originX = 50 - (STATE.camX * pxPerM);
+            return (x - originX) / pxPerM;
+        }
+
+        function toggleButton(btn, key, activeClass = 'bg-blue-600', textClass = 'text-white') {
+            STATE[key] = !STATE[key];
+            if(STATE[key]) {
+                btn.className = `px-3 py-2 ${activeClass} border border-transparent rounded text-xs ${textClass} font-semibold flex items-center justify-center gap-2 transition active:scale-95 shadow-lg shadow-blue-900/20`;
+                btn.style.borderColor = "";
+            } else {
+                btn.className = "px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-300 font-semibold flex items-center justify-center gap-2 transition active:scale-95";
+            }
+            if(key === 'showVectors') {
+                document.getElementById('vector-legend').style.opacity = STATE.showVectors ? 1 : 0;
+            }
+        }
+
+        function updateUI() {
+            STATE.v0 = parseFloat(ui.speed.value);
+            STATE.angle = parseFloat(ui.angle.value);
+            STATE.height = parseFloat(ui.elevation.value);
+            STATE.g = parseFloat(ui.planet.value);
+            
+            ui.valSpeed.innerText = STATE.v0.toFixed(1) + " m/s";
+            ui.valAngle.innerText = STATE.angle + "°";
+            ui.valElevation.innerText = STATE.height + " m";
+
+            calculatePrediction();
+            draw(); // Redraw on UI change to show updated cannon/prediction
+        }
+
+        // --- Physics Classes ---
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; 
+                this.y = y;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.color = color;
+            }
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.life -= 2.0 * dt;
+            }
+            draw() {
+                const pos = worldToScreen(this.x, this.y);
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(pos.x, pos.y, 3, 3);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+             class Projectile {
+            constructor() {
+                this.t = 0;
+                this.x = 0;
+                this.y = STATE.height;
+                
+                const rad = STATE.angle * Math.PI / 180;
+                this.vx = STATE.v0 * Math.cos(rad);
+                this.vy = STATE.v0 * Math.sin(rad);
+                
+                this.ax = 0;
+                this.ay = -STATE.g;
+                
+                this.active = true;
+                this.path = [];
+                this.maxH = STATE.height;
+                
+                const objProps = OBJECTS[STATE.object];
+                this.mass = objProps.mass;
+                this.radius = objProps.radius;
+                this.cd = objProps.cd;
+                this.color = objProps.color;
+                this.drawColor = (STATE.object === 'cannonball' || STATE.object === 'piano') ? '#94a3b8' : this.color;
+            }
+
+            update(dt) {
+                if (!this.active) return;
+                
+                const timeStep = STATE.slowMo ? dt * 0.2 : dt;
+                this.t += timeStep;
+
+                if(STATE.airResist) {
+                    const rho = 1.2;
+                    const area = Math.PI * this.radius * this.radius;
+                    const v = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                    const forceDrag = 0.5 * rho * v * v * this.cd * area;
+                    
+                    const theta = Math.atan2(this.vy, this.vx);
+                    const fx = -forceDrag * Math.cos(theta);
+                    const fy = -forceDrag * Math.sin(theta);
+                    
+                    this.ax = fx / this.mass;
+                    this.ay = -STATE.g + (fy / this.mass);
+                } else {
+                    this.ax = 0;
+                    this.ay = -STATE.g;
+                }
+
+                this.vx += this.ax * timeStep;
+                this.vy += this.ay * timeStep;
+                this.x += this.vx * timeStep;
+                this.y += this.vy * timeStep;
+
+                if (this.y > this.maxH) this.maxH = this.y;
+
+                if (this.path.length === 0 || Math.hypot(this.x - this.path[this.path.length-1].x, this.y - this.path[this.path.length-1].y) > 0.5) {
+                    this.path.push({x: this.x, y: this.y});
+                }
+
+                if (this.y <= 0) {
+                    this.y = 0;
+                    this.active = false;
+                    this.explode();
+                    ui.dataRange.innerHTML = this.x.toFixed(2) + ' <span class="text-xs text-slate-500">m</span>';
+                    ui.dataTime.innerHTML = this.t.toFixed(2) + ' <span class="text-xs text-slate-500">s</span>';
+                    STATE.traces.push({path: this.path, color: `hsl(${Math.random() * 360}, 70%, 60%)`});
+                }
+            }
+
+            explode() {
+                for(let i=0; i<10; i++) particles.push(new Particle(this.x, this.y, '#fbbf24'));
+            }
+
+            draw() {
+                const pos = worldToScreen(this.x, this.y);
+                ctx.fillStyle = this.drawColor;
+                ctx.beginPath();
+                let r = this.radius * BASE_SCALE * STATE.scale;
+                if(r < 4) r = 4;
+                if(r > 20) r = 20; 
+                
+                if (STATE.object === 'piano') ctx.fillRect(pos.x - r, pos.y - r, r*2, r*2);
+                else {
+                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                if(STATE.showVectors && this.active) {
+                    this.drawVector(pos, this.vx, this.vy, '#4ade80', 0.5); 
+                    this.drawVector(pos, this.ax, this.ay, '#facc15', 0.5); 
+                }
+
+                if(STATE.showComponents && this.active) {
+                     this.drawDashedLine(pos, {x: pos.x + this.vx * BASE_SCALE * STATE.scale * 0.5, y: pos.y}, '#4ade80');
+                     this.drawDashedLine(pos, {x: pos.x, y: pos.y - this.vy * BASE_SCALE * STATE.scale * 0.5}, '#4ade80');
+                }
+            }
+            
+           drawVector(origin, vx, vy, color, scale) {
+                const endX = origin.x + vx * BASE_SCALE * STATE.scale * scale;
+                const endY = origin.y - vy * BASE_SCALE * STATE.scale * scale;
+                ctx.beginPath();
+                ctx.moveTo(origin.x, origin.y);
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                const angle = Math.atan2(origin.y - endY, endX - origin.x);
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - 8 * Math.cos(angle - Math.PI / 6), endY + 8 * Math.sin(angle - Math.PI / 6));
+                ctx.lineTo(endX - 8 * Math.cos(angle + Math.PI / 6), endY + 8 * Math.sin(angle + Math.PI / 6));
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+
+            drawDashedLine(start, end, color) {
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.strokeStyle = color;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        let particles = [];
+
+        function calculatePrediction() {
+            if(STATE.airResist) return;
+            // Calculations for UI prediction numbers
+            const rad = STATE.angle * Math.PI / 180;
+            const vx = STATE.v0 * Math.cos(rad);
+            const vy = STATE.v0 * Math.sin(rad);
+            const g = STATE.g;
+
+            let t_flight = 0;
+            if (g === 0) t_flight = 0;
+            else {
+                const disc = Math.sqrt(vy*vy + 2*g*STATE.height);
+                t_flight = (vy + disc) / g;
+            }
+
+            const range = vx * t_flight;
+            let max_h = STATE.height;
+            if(g > 0) {
+                const t_peak = vy / g;
+                if (t_peak > 0) max_h = STATE.height + (vy * t_peak) - (0.5 * g * t_peak * t_peak);
+            }
+
+            if(STATE.projectiles.length === 0 || !STATE.projectiles[0].active) {
+                ui.dataRange.innerHTML = range.toFixed(2) + ' <span class="text-xs text-slate-500">m</span>';
+                ui.dataHeight.innerHTML = max_h.toFixed(2) + ' <span class="text-xs text-slate-500">m</span>';
+                ui.dataTime.innerHTML = t_flight.toFixed(2) + ' <span class="text-xs text-slate-500">s</span>';
+            }
+        }
+
+        function updateCamera(dt) {
+            let focusX = 0;
+            let focusY = 0;
+            
+            if (STATE.projectiles.length > 0 && STATE.projectiles[0].active) {
+                const p = STATE.projectiles[0];
+                focusX = p.x;
+                focusY = p.y;
+            } else {
+                focusX = STATE.target.x / 2;
+            }
+
+            const requiredWidthMeters = Math.max(STATE.target.x + 10, focusX + 20, 30);
+            const requiredHeightMeters = Math.max(STATE.height + 10, focusY + 10, 20);
+
+            const scaleX = width / (requiredWidthMeters * BASE_SCALE);
+            const scaleY = height / (requiredHeightMeters * BASE_SCALE);
+            
+            let targetS = Math.min(scaleX, scaleY);
+            if(targetS > 1.5) targetS = 1.5; 
+            if(targetS < 0.2) targetS = 0.2; 
+
+            STATE.scale += (targetS - STATE.scale) * 2.0 * dt;
+            ui.zoomLevel.innerText = STATE.scale.toFixed(1) + "x";
+            
+            STATE.camX = 0; 
+            STATE.camY = 0;
+        }
+
+        // --- Drawing Loop ---
+
+        function drawEnvironment() {
+            if(!height) return;
+            const groundPos = worldToScreen(0, 0);
+            
+            // Ground
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, groundPos.y, width, height - groundPos.y);
+
+            // Marks
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px monospace';
+            const step = 10;
+            for(let x=0; x<500; x+=step) {
+                const pos = worldToScreen(x, 0);
+                if(pos.x > width) break;
+                ctx.fillRect(pos.x, pos.y, 2, 6);
+                ctx.fillText(x + "m", pos.x - 6, pos.y + 16);
+            }
+        }
+
+        function drawCannon() {
+            if(!height) return;
+            const pos = worldToScreen(0, STATE.height);
+            const scale = STATE.scale;
+            
+            // Save context for rotation
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.rotate(-STATE.angle * Math.PI / 180);
+            
+            // Barrel - Simple Rect
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(0, -10*scale, 60*scale, 20*scale);
+            
+            // Guide line for aim
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(60*scale, 0);
+            ctx.lineTo(200*scale, 0);
+            ctx.stroke();
+            
+            ctx.restore();
+
+            // Wheel
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 12*scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hubcap
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 4*scale, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pedestal (if elevated)
+            if (STATE.height > 0) {
+                ctx.fillStyle = '#334155';
+                const w = 10*scale;
+                ctx.fillRect(pos.x - w/2, pos.y, w, (height - 50) - pos.y);
+            }
+        }
+
+        function drawPrediction() {
+            if(STATE.g === 0 || STATE.airResist || !height) return;
+            const start = worldToScreen(0, STATE.height);
+            const rad = STATE.angle * Math.PI / 180;
+            const vx = STATE.v0 * Math.cos(rad);
+            const vy = STATE.v0 * Math.sin(rad);
+            
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            
+            let t = 0;
+            let dt = 0.1;
+            let x=0, y=STATE.height;
+            
+            // Limit prediction length
+            while(y >= 0 && x < 500) { 
+                x = vx * t;
+                y = STATE.height + (vy * t) - (0.5 * STATE.g * t * t);
+                const pos = worldToScreen(x, y);
+                ctx.lineTo(pos.x, pos.y);
+                t += dt;
+            }
+            
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function drawTarget() {
+            if(!height) return;
+            const pos = worldToScreen(STATE.target.x, 0);
+            const size = 15 * STATE.scale;
+            
+            if(STATE.projectiles.length > 0 && !STATE.projectiles[0].active) {
+                 const p = STATE.projectiles[0];
+                 if(Math.abs(p.x - STATE.target.x) < 2) {
+                     ctx.fillStyle = '#4ade80'; 
+                     ctx.font = 'bold 12px sans-serif';
+                     ctx.fillText("HIT!", pos.x - 10, pos.y - 30);
+                 }
+            }
+
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(pos.x - size, pos.y - (4*STATE.scale), size*2, 4*STATE.scale);
+
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 20*STATE.scale, Math.PI, 0);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Drag handle visual
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+            ctx.fill();
+        }
+
+        function draw() {
+            if(!width || !height) return;
+            
+            ctx.clearRect(0, 0, width, height);
+            drawEnvironment();
+            if(STATE.projectiles.length === 0 || !STATE.projectiles[0].active) drawPrediction();
+            drawTarget();
+
+            STATE.traces.forEach(trace => {
+                if (trace.path.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(worldToScreen(trace.path[0].x, trace.path[0].y).x, worldToScreen(trace.path[0].x, trace.path[0].y).y);
+                for (let p of trace.path) {
+                    const sc = worldToScreen(p.x, p.y);
+                    ctx.lineTo(sc.x, sc.y);
+                }
+                ctx.strokeStyle = trace.color;
+                ctx.globalAlpha = 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            });
+
+            drawCannon(); 
+
+            for (let i = particles.length - 1; i >= 0; i--) particles[i].draw();
+            STATE.projectiles.forEach(p => p.draw());
+        }
+
+        function loop(timestamp) {
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            const safeDt = Math.min(dt, 0.1);
+
+            updateCamera(safeDt);
+            STATE.projectiles.forEach(p => p.update(safeDt));
+            STATE.projectiles = STATE.projectiles.filter(p => p.active || p.y === 0);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update(safeDt);
+                if(particles[i].life <= 0) particles.splice(i, 1);
+            }
+            draw();
+            requestAnimationFrame(loop);
+        } 
+        
+         // --- Event Listeners ---
+        function fire() {
+            STATE.projectiles = [];
+            STATE.projectiles.push(new Projectile());
+            const canvasEl = document.getElementById('simCanvas');
+            canvasEl.classList.remove('animate-recoil');
+            void canvasEl.offsetWidth;
+            canvasEl.classList.add('animate-recoil');
+        }
+
+        ui.btnVectors.addEventListener('click', () => toggleButton(ui.btnVectors, 'showVectors', 'bg-green-600'));
+        ui.btnComponents.addEventListener('click', () => toggleButton(ui.btnComponents, 'showComponents', 'bg-green-600'));
+        ui.btnSlowMo.addEventListener('click', () => toggleButton(ui.btnSlowMo, 'slowMo', 'bg-amber-600'));
+        ui.btnAir.addEventListener('click', () => toggleButton(ui.btnAir, 'airResist', 'bg-red-600'));
+
+        document.getElementById('btn-fire').addEventListener('click', fire);
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            STATE.traces = [];
+            STATE.projectiles = [];
+            particles = [];
+            draw();
+        });
+
+        [ui.speed, ui.angle, ui.elevation, ui.planet].forEach(el => el.addEventListener('input', updateUI));
+        ui.objSelect.addEventListener('change', (e) => STATE.object = e.target.value);
+        ui.objSelectMob.addEventListener('change', (e) => STATE.object = e.target.value);
+
+        let isDragging = false;
+        function handleStart(clientX, clientY) {
+            const r = canvas.getBoundingClientRect();
+            const x = clientX - r.left;
+            const worldX = screenToWorld(x, 0);
+            if(Math.abs(worldX - STATE.target.x) < 3) {
+                isDragging = true;
+                canvas.style.cursor = 'grabbing';
+            }
+        }
+        function handleMove(clientX) {
+             if (isDragging) {
+                const r = canvas.getBoundingClientRect();
+                const worldX = screenToWorld(clientX - r.left, 0);
+                STATE.target.x = Math.max(5, worldX);
+            }
+        }
+        
+        canvas.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'crosshair'; });
+        
+        canvas.addEventListener('touchstart', (e) => {
+             e.preventDefault(); 
+             handleStart(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+        window.addEventListener('touchmove', (e) => {
+            if(isDragging) e.preventDefault();
+            handleMove(e.touches[0].clientX);
+        }, {passive: false});
+        window.addEventListener('touchend', () => isDragging = false);
+
+        // Force initial resize and draw synchronously
+        resize();
+        updateUI();
+        lucide.createIcons();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>

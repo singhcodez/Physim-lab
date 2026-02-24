@@ -124,6 +124,6 @@ nav {
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-    .iframe-wrapper { height: 90vh; }
+    .iframe-wrapper { height: 90vh; overflow:scroll;}
     .nav-links { display: none; }
 }
