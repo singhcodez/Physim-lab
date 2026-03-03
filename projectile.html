@@ -408,6 +408,9 @@
                     const fy = -forceDrag * Math.sin(theta);
                     
                     this.ax = fx / this.mass;
+                    
+                    
+                    
                     this.ay = -STATE.g + (fy / this.mass);
                 } else {
                     this.ax = 0;

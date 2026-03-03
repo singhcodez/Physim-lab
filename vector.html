@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Space Concepts Simulation</title>
+    
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; }
+        /* Custom scrollbar for sidebar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row h-screen font-sans text-slate-800">
+
+    <!-- Sidebar Controls -->
+    <div id="ui-panel" class="w-full md:w-96 bg-white flex flex-col h-1/2 md:h-full z-10 shadow-xl overflow-hidden rounded-t-3xl md:rounded-none">
+        <!-- Header -->
+        <div class="bg-indigo-600 text-white p-5 shadow-md z-10">
+            <h1 class="text-2xl font-bold tracking-tight">Vector Space Explorer</h1>
+            <p class="text-indigo-200 text-sm mt-1">Interactive 3D Linear Algebra</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-5 space-y-6">
+            
+            <!-- Analysis Dashboard -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Live Analysis</h2>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-slate-600">Linear Dependence:</span>
+                        <span id="status-dependence" class="px-2 py-1 rounded text-xs font-bold bg-slate-200 text-slate-600">N/A</span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-slate-600">Subspace Dimension:</span>
+                        <span id="status-dimension" class="text-sm font-bold text-indigo-600">0</span>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200">
+                        <span class="text-sm font-medium text-slate-600 block mb-1">Generated Span (Subspace):</span>
+                        <div id="status-span" class="text-sm text-slate-800 font-semibold bg-indigo-50 p-2 rounded border border-indigo-100">
+                            Origin (Point)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vector Controls -->
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Vectors (Generators)</h2>
+                    <button id="btn-add-vector" class="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1 rounded-full font-medium transition-colors">
+                        + Add Vector
+                    </button>
+                </div>
+                
+                <div id="vectors-container" class="space-y-3">
+                    <!-- Vector cards generated here -->
+                </div>
+            </div>
+
+            <!-- Educational Concepts Glossary -->
+            <div class="bg-amber-50 rounded-xl p-4 border border-amber-100 text-sm">
+                <h3 class="font-bold text-amber-800 mb-2">Concepts</h3>
+                <ul class="space-y-2 text-amber-900">
+                    <li><strong class="font-semibold">Generator / Basis:</strong> The set of vectors you define. They act as the "building blocks".</li>
+                    <li><strong class="font-semibold">Linear Span:</strong> All possible vectors reachable by scaling and adding the generators. Visualized as the geometric shape (line, plane, or volume).</li>
+                    <li><strong class="font-semibold">Subspace:</strong> The geometric span that passes through the origin.</li>
+                    <li><strong class="font-semibold">Independence:</strong> Vectors point in entirely new spatial dimensions.</li>
+                    <li><strong class="font-semibold">Dependence:</strong> At least one vector is redundant (lies in the span of the others).</li>
+                </ul>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- 3D Canvas Area -->
+    <div id="canvas-container" class="flex-1 relative bg-slate-900 h-1/2 md:h-full">
+        <!-- Floating Legend -->
+        <div class="absolute bottom-4 left-4 bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-lg pointer-events-none text-xs text-slate-300">
+            <div class="font-bold text-slate-100 mb-2">Axes</div>
+            <div class="flex items-center gap-2"><div class="w-3 h-3 bg-red-500 rounded-sm"></div> X-Axis</div>
+            <div class="flex items-center gap-2 mt-1"><div class="w-3 h-3 bg-green-500 rounded-sm"></div> Y-Axis</div>
+            <div class="flex items-center gap-2 mt-1"><div class="w-3 h-3 bg-blue-500 rounded-sm"></div> Z-Axis</div>
+            <div class="mt-3 text-slate-400 italic">Drag to rotate • Scroll to zoom</div>
+        </div>
+    </div>
+
+    <script>
+        // --- Application State ---
+        const state = {
+            vectors: [
+                { id: 'v1', name: 'v₁', x: 2, y: 1, z: 0, color: '#f43f5e' }, // Rose
+                { id: 'v2', name: 'v₂', x: -1, y: 2, z: 0, color: '#10b981' }  // Emerald
+            ],
+            colors: ['#f43f5e', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'],
+            nextColorIdx: 2
+        };
+
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0f172a');
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(10, 8, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Environment Helpers
+        const axesHelper = new THREE.AxesHelper(10);
+        scene.add(axesHelper);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+        scene.add(gridHelper);
+
+        // Group to hold our dynamic geometry (vectors and spans)
+        const dynamicGroup = new THREE.Group();
+        scene.add(dynamicGroup);
+
+        // --- Math Logic ---
+
+        // Computes the linearly independent basis from the current vectors
+        // Returns an array of THREE.Vector3 representing the basis
+        function computeBasis() {
+            let basis = [];
+            state.vectors.forEach(vData => {
+                let v = new THREE.Vector3(vData.x, vData.y, vData.z);
+                if (v.length() < 0.001) return; // Ignore zero vectors
+
+                if (basis.length === 0) {
+                    basis.push(v);
+                } else if (basis.length === 1) {
+                    // Independent if cross product with basis[0] is non-zero
+                    let cross = new THREE.Vector3().crossVectors(basis[0], v);
+                    if (cross.length() > 0.001) {
+                        basis.push(v);
+                    }
+                } else if (basis.length === 2) {
+                    // Independent if it does not lie in the plane of basis[0] and basis[1]
+                    // We check if the dot product with the normal of the plane is non-zero
+                    let normal = new THREE.Vector3().crossVectors(basis[0], basis[1]).normalize();
+                    if (Math.abs(normal.dot(v)) > 0.001) {
+                        basis.push(v);
+                    }
+                }
+            });
+            return basis;
+        }
+
+        function analyzeVectors() {
+            const numVectors = state.vectors.length;
+            const basis = computeBasis();
+            const dim = basis.length;
+            
+            // Check zero vectors
+            let hasZeroVector = state.vectors.some(v => new THREE.Vector3(v.x, v.y, v.z).length() < 0.001);
+
+            let isIndependent = false;
+            if (numVectors === 0) {
+                isIndependent = true; // Vacuously true
+            } else if (hasZeroVector) {
+                isIndependent = false; // Set containing zero vector is dependent
+            } else {
+                isIndependent = (dim === numVectors);
+            }
+
+            return { basis, dim, isIndependent, numVectors };
+        }
+
+        // --- Visualization Logic ---
+
+        function drawVisualization() {
+            // Clear previous dynamically drawn objects
+            while(dynamicGroup.children.length > 0){ 
+                const child = dynamicGroup.children[0];
+                dynamicGroup.remove(child);
+                if(child.geometry) child.geometry.dispose();
+                if(child.material) child.material.dispose();
+            }
+
+            // 1. Draw Vectors (Arrows)
+            const origin = new THREE.Vector3(0, 0, 0);
+            state.vectors.forEach(vData => {
+                const dir = new THREE.Vector3(vData.x, vData.y, vData.z);
+                const length = dir.length();
+                if (length > 0) {
+                    dir.normalize();
+                    const hexColor = parseInt(vData.color.replace('#', '0x'));
+                    // Head length 0.5, head width 0.3
+                    const arrowHelper = new THREE.ArrowHelper(dir, origin, length, hexColor, 0.6, 0.4);
+                    // Make arrows slightly thicker visually by adding a line inside
+                    arrowHelper.line.material.linewidth = 3; 
+                    dynamicGroup.add(arrowHelper);
+
+                    // Add a small sphere at the tip
+                    const tipGeom = new THREE.SphereGeometry(0.15, 16, 16);
+                    const tipMat = new THREE.MeshBasicMaterial({ color: hexColor });
+                    const tip = new THREE.Mesh(tipGeom, tipMat);
+                    tip.position.copy(dir.clone().multiplyScalar(length));
+                    dynamicGroup.add(tip);
+                }
+            });
+
+            // 2. Analyze & Draw Span (Subspace)
+            const analysis = analyzeVectors();
+            
+            if (analysis.dim === 0) {
+                // Dim 0: Just the origin
+                const sphereGeom = new THREE.SphereGeometry(0.2, 16, 16);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+                dynamicGroup.add(sphere);
+            } 
+            else if (analysis.dim === 1) {
+                // Dim 1: Line passing through the origin
+                const dir = analysis.basis[0].clone().normalize();
+                const material = new THREE.LineBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.6,
+                    linewidth: 2
+                });
+                const points = [
+                    dir.clone().multiplyScalar(-30),
+                    dir.clone().multiplyScalar(30)
+                ];
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, material);
+                dynamicGroup.add(line);
+            }
+            else if (analysis.dim === 2) {
+                // Dim 2: Plane
+                const normal = new THREE.Vector3().crossVectors(analysis.basis[0], analysis.basis[1]).normalize();
+                const planeGeom = new THREE.PlaneGeometry(40, 40);
+                const planeMat = new THREE.MeshBasicMaterial({
+                    color: 0x818cf8, // Indigo tint
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide,
+                    depthWrite: false // Prevents visual glitches with grid
+                });
+                const plane = new THREE.Mesh(planeGeom, planeMat);
+                
+                // Align plane with normal
+                const defaultUp = new THREE.Vector3(0, 0, 1); // PlaneGeometry faces Z by default
+                plane.quaternion.setFromUnitVectors(defaultUp, normal);
+                dynamicGroup.add(plane);
+
+                // Add grid lines to the plane for better depth perception
+                const gridHelper = new THREE.GridHelper(40, 20, 0x6366f1, 0x6366f1);
+                gridHelper.material.opacity = 0.2;
+                gridHelper.material.transparent = true;
+                gridHelper.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal); // GridHelper faces Y by default
+                dynamicGroup.add(gridHelper);
+            }
+            else if (analysis.dim === 3) {
+                // Dim 3: The entire 3D space
+                // Visualized as a large translucent wireframe sphere or ambient visual
+                const sphereGeom = new THREE.SphereGeometry(15, 32, 32);
+                const sphereMat = new THREE.MeshBasicMaterial({
+                    color: 0x38bdf8,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.1
+                });
+                const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+                dynamicGroup.add(sphere);
+            }
+
+            updateDashboard(analysis);
+        }
+
+        // --- UI Logic ---
+
+        function updateDashboard(analysis) {
+            // Dimension
+            document.getElementById('status-dimension').innerText = `${analysis.dim}D`;
+
+            // Dependence
+            const depSpan = document.getElementById('status-dependence');
+            if (analysis.numVectors === 0) {
+                depSpan.innerText = "N/A";
+                depSpan.className = "px-2 py-1 rounded text-xs font-bold bg-slate-200 text-slate-600";
+            } else if (analysis.isIndependent) {
+                depSpan.innerText = "Linearly Independent";
+                depSpan.className = "px-2 py-1 rounded text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200";
+            } else {
+                depSpan.innerText = "Linearly Dependent";
+                depSpan.className = "px-2 py-1 rounded text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200";
+            }
+
+            // Span description
+            const spanDiv = document.getElementById('status-span');
+            let spanText = "";
+            if (analysis.dim === 0) spanText = "Point (Origin only)";
+            else if (analysis.dim === 1) spanText = "Line (1D Subspace)";
+            else if (analysis.dim === 2) spanText = "Plane (2D Subspace)";
+            else if (analysis.dim === 3) spanText = "Entire ℝ³ Space (3D)";
+            
+            spanDiv.innerText = spanText;
+        }
+
+        function renderVectorsUI() {
+            const container = document.getElementById('vectors-container');
+            container.innerHTML = '';
+
+            state.vectors.forEach((v, index) => {
+                const card = document.createElement('div');
+                card.className = "bg-white border border-slate-200 rounded-lg p-4 shadow-sm relative";
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded-full shadow-inner" style="background-color: ${v.color}"></div>
+                            <span class="font-bold text-slate-700">${v.name}</span>
+                            <span class="text-xs text-slate-400 font-mono bg-slate-100 px-1 rounded">[${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}]</span>
+                        </div>
+                        <button class="text-slate-300 hover:text-rose-500 transition-colors" onclick="removeVector('${v.id}')" title="Remove Vector">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        ${['x', 'y', 'z'].map(axis => `
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-bold text-slate-400 uppercase w-4">${axis}</span>
+                                <input type="range" min="-5" max="5" step="0.5" value="${v[axis]}" 
+                                    class="flex-1"
+                                    oninput="updateVector('${v.id}', '${axis}', this.value)">
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            // Toggle Add Button
+            const btnAdd = document.getElementById('btn-add-vector');
+            if (state.vectors.length >= 3) {
+                btnAdd.style.display = 'none';
+            } else {
+                btnAdd.style.display = 'block';
+            }
+        }
+
+        // --- Interactions ---
+
+        window.updateVector = function(id, axis, value) {
+            const vector = state.vectors.find(v => v.id === id);
+            if (vector) {
+                vector[axis] = parseFloat(value);
+                // Re-render UI to update text representation
+                renderVectorsUI(); 
+                // Re-draw 3D scene
+                drawVisualization();
+            }
+        };
+
+
+        window.removeVector = function(id) {
+            state.vectors = state.vectors.filter(v => v.id !== id);
+            renderVectorsUI();
+            drawVisualization();
+        };
+
+        document.getElementById('btn-add-vector').addEventListener('click', () => {
+            if (state.vectors.length < 3) {
+                const newId = 'v' + Date.now();
+                const newNum = state.vectors.length + 1;
+                state.vectors.push({
+                    id: newId,
+                    name: 'v' + newNum,
+                    x: Math.floor(Math.random() * 5) - 2,
+                    y: Math.floor(Math.random() * 5) - 2,
+                    z: Math.floor(Math.random() * 5) - 2,
+                    color: state.colors[state.nextColorIdx % state.colors.length]
+                });
+                state.nextColorIdx++;
+                renderVectorsUI();
+                drawVisualization();
+            }
+        });
+
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+// --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Initialization ---
+        renderVectorsUI();
+        drawVisualization();
+        animate();
+
+    </script>
+</body>
+</html>
